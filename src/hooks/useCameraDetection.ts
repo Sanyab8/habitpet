@@ -6,13 +6,15 @@ export interface DetectionState {
   isDetecting: boolean;
   motionLevel: number;
   matchScore: number;
+  patternMatch: boolean;
   error: string | null;
 }
 
-export interface CalibrationData {
-  frames: string[];
-  avgColor: { r: number; g: number; b: number };
-  motionSignature: number[];
+export interface MotionPattern {
+  motionSequence: number[];
+  avgIntensity: number;
+  peakMotion: number;
+  duration: number;
 }
 
 export const useCameraDetection = (referenceFrames?: string[]) => {
@@ -21,7 +23,7 @@ export const useCameraDetection = (referenceFrames?: string[]) => {
   const streamRef = useRef<MediaStream | null>(null);
   const animationRef = useRef<number | null>(null);
   const prevFrameRef = useRef<ImageData | null>(null);
-  const referenceDataRef = useRef<CalibrationData | null>(null);
+  const learnedPatternRef = useRef<MotionPattern | null>(null);
   
   const [state, setState] = useState<DetectionState>({
     isActive: false,
@@ -29,70 +31,74 @@ export const useCameraDetection = (referenceFrames?: string[]) => {
     isDetecting: false,
     motionLevel: 0,
     matchScore: 0,
+    patternMatch: false,
     error: null,
   });
 
   const [motionHistory, setMotionHistory] = useState<number[]>([]);
 
-  // Process reference frames on mount
+  // Learn motion pattern from reference frames
   useEffect(() => {
     if (referenceFrames && referenceFrames.length > 0) {
-      processReferenceFrames(referenceFrames);
+      learnPatternFromFrames(referenceFrames);
     }
   }, [referenceFrames]);
 
-  const processReferenceFrames = async (frames: string[]) => {
+  const learnPatternFromFrames = async (frames: string[]) => {
+    if (frames.length < 5) return;
+
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    let totalR = 0, totalG = 0, totalB = 0;
-    let pixelCount = 0;
-    const motionSig: number[] = [];
+    const motionSequence: number[] = [];
+    let prevImageData: ImageData | null = null;
+    let totalIntensity = 0;
 
     for (const frame of frames) {
       const img = new Image();
       await new Promise<void>((resolve) => {
         img.onload = () => {
-          canvas.width = img.width;
-          canvas.height = img.height;
-          ctx.drawImage(img, 0, 0);
+          canvas.width = 160;
+          canvas.height = 120;
+          ctx.drawImage(img, 0, 0, 160, 120);
           
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const data = imageData.data;
+          const imageData = ctx.getImageData(0, 0, 160, 120);
           
-          // Calculate average color
-          for (let i = 0; i < data.length; i += 4) {
-            totalR += data[i];
-            totalG += data[i + 1];
-            totalB += data[i + 2];
-            pixelCount++;
+          if (prevImageData) {
+            // Calculate motion between frames
+            let diffSum = 0;
+            const data = imageData.data;
+            const prevData = prevImageData.data;
+            
+            for (let i = 0; i < data.length; i += 16) {
+              const rDiff = Math.abs(data[i] - prevData[i]);
+              const gDiff = Math.abs(data[i + 1] - prevData[i + 1]);
+              const bDiff = Math.abs(data[i + 2] - prevData[i + 2]);
+              diffSum += (rDiff + gDiff + bDiff) / 3;
+            }
+            
+            const motion = diffSum / (data.length / 16);
+            motionSequence.push(motion);
+            totalIntensity += motion;
           }
           
-          // Calculate motion signature (histogram of pixel intensities)
-          const histogram = new Array(16).fill(0);
-          for (let i = 0; i < data.length; i += 4) {
-            const intensity = (data[i] + data[i + 1] + data[i + 2]) / 3;
-            const bin = Math.floor(intensity / 16);
-            histogram[Math.min(bin, 15)]++;
-          }
-          motionSig.push(...histogram);
-          
+          prevImageData = imageData;
           resolve();
         };
         img.src = frame;
       });
     }
 
-    referenceDataRef.current = {
-      frames,
-      avgColor: {
-        r: totalR / pixelCount,
-        g: totalG / pixelCount,
-        b: totalB / pixelCount,
-      },
-      motionSignature: motionSig,
-    };
+    if (motionSequence.length > 0) {
+      learnedPatternRef.current = {
+        motionSequence,
+        avgIntensity: totalIntensity / motionSequence.length,
+        peakMotion: Math.max(...motionSequence),
+        duration: motionSequence.length,
+      };
+      console.log('Learned motion pattern:', learnedPatternRef.current);
+    }
   };
 
   const startCamera = useCallback(async () => {
@@ -156,83 +162,45 @@ export const useCameraDetection = (referenceFrames?: string[]) => {
       isDetecting: false,
       motionLevel: 0,
       matchScore: 0,
+      patternMatch: false,
       error: null,
     });
   }, []);
 
-  const captureFrame = useCallback((): string | null => {
-    if (!videoRef.current || !canvasRef.current) return null;
+  const calculatePatternMatch = useCallback((recentMotion: number[]): number => {
+    if (!learnedPatternRef.current || recentMotion.length < 5) return 0;
+
+    const pattern = learnedPatternRef.current;
     
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
+    // Compare motion characteristics
+    const avgMotion = recentMotion.reduce((a, b) => a + b, 0) / recentMotion.length;
+    const peakMotion = Math.max(...recentMotion);
     
-    if (!ctx || video.readyState !== 4) return null;
-
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    // Intensity similarity (how similar is the average motion level)
+    const intensityRatio = Math.min(avgMotion, pattern.avgIntensity) / 
+                          Math.max(avgMotion, pattern.avgIntensity, 1);
     
-    return canvas.toDataURL('image/jpeg', 0.5);
-  }, []);
-
-  const calculateMatchScore = useCallback((currentFrame: ImageData): number => {
-    if (!referenceDataRef.current) return 0;
-
-    const ref = referenceDataRef.current;
-    const data = currentFrame.data;
-
-    // Calculate current frame's average color
-    let totalR = 0, totalG = 0, totalB = 0;
-    for (let i = 0; i < data.length; i += 16) {
-      totalR += data[i];
-      totalG += data[i + 1];
-      totalB += data[i + 2];
-    }
-    const pixelCount = data.length / 16;
-    const avgR = totalR / pixelCount;
-    const avgG = totalG / pixelCount;
-    const avgB = totalB / pixelCount;
-
-    // Color similarity (0-100)
-    const colorDist = Math.sqrt(
-      Math.pow(avgR - ref.avgColor.r, 2) +
-      Math.pow(avgG - ref.avgColor.g, 2) +
-      Math.pow(avgB - ref.avgColor.b, 2)
-    );
-    const colorScore = Math.max(0, 100 - colorDist / 4.4);
-
-    // Calculate current histogram
-    const histogram = new Array(16).fill(0);
-    for (let i = 0; i < data.length; i += 4) {
-      const intensity = (data[i] + data[i + 1] + data[i + 2]) / 3;
-      const bin = Math.floor(intensity / 16);
-      histogram[Math.min(bin, 15)]++;
-    }
-
-    // Histogram similarity
-    const refHistogram = ref.motionSignature.slice(0, 16);
-    let histSim = 0;
-    const maxHist = Math.max(...histogram, ...refHistogram);
-    if (maxHist > 0) {
-      for (let i = 0; i < 16; i++) {
-        histSim += Math.min(histogram[i], refHistogram[i] || 0);
-      }
-      histSim = (histSim / (data.length / 4)) * 100;
-    }
-
+    // Peak similarity (how similar are the peak movements)
+    const peakRatio = Math.min(peakMotion, pattern.peakMotion) / 
+                     Math.max(peakMotion, pattern.peakMotion, 1);
+    
+    // Activity level check (is there enough motion happening)
+    const activityBonus = avgMotion > pattern.avgIntensity * 0.5 ? 1 : 0.5;
+    
     // Combined score
-    return (colorScore * 0.4 + histSim * 0.6);
+    const matchScore = ((intensityRatio * 0.4) + (peakRatio * 0.4) + (activityBonus * 0.2)) * 100;
+    
+    return Math.min(matchScore, 100);
   }, []);
 
   const detectMotion = useCallback(() => {
-    if (!videoRef.current || !canvasRef.current) return { motion: 0, match: 0 };
+    if (!videoRef.current || !canvasRef.current) return { motion: 0, match: 0, patternMatch: false };
     
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     
-    if (!ctx || video.readyState !== 4) return { motion: 0, match: 0 };
+    if (!ctx || video.readyState !== 4) return { motion: 0, match: 0, patternMatch: false };
 
     canvas.width = video.videoWidth || 640;
     canvas.height = video.videoHeight || 480;
@@ -241,24 +209,21 @@ export const useCameraDetection = (referenceFrames?: string[]) => {
     const currentFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
     
     let motionScore = 0;
-    let matchScore = 0;
-
-    // Calculate match score against reference
-    if (referenceDataRef.current) {
-      matchScore = calculateMatchScore(currentFrame);
-    }
 
     if (prevFrameRef.current) {
       const prev = prevFrameRef.current.data;
       const curr = currentFrame.data;
       let diffPixels = 0;
+      let totalDiff = 0;
       
       for (let i = 0; i < curr.length; i += 16) {
         const rDiff = Math.abs(curr[i] - prev[i]);
         const gDiff = Math.abs(curr[i + 1] - prev[i + 1]);
         const bDiff = Math.abs(curr[i + 2] - prev[i + 2]);
+        const avgDiff = (rDiff + gDiff + bDiff) / 3;
+        totalDiff += avgDiff;
         
-        if (rDiff > 30 || gDiff > 30 || bDiff > 30) {
+        if (rDiff > 25 || gDiff > 25 || bDiff > 25) {
           diffPixels++;
         }
       }
@@ -266,36 +231,51 @@ export const useCameraDetection = (referenceFrames?: string[]) => {
       const totalSamples = curr.length / 16;
       motionScore = (diffPixels / totalSamples) * 100;
 
-      // Draw motion visualization
-      if (motionScore > 5) {
-        const alpha = Math.min(motionScore / 50, 0.3);
-        const hue = matchScore > 50 ? '150' : '280'; // Green if matching, purple otherwise
+      // Visual feedback based on motion and pattern match
+      if (motionScore > 3) {
+        const recentMotion = [...motionHistory.slice(-20), motionScore];
+        const patternMatchScore = calculatePatternMatch(recentMotion);
+        const isPatternMatch = patternMatchScore > 60 && motionScore > 5;
+        
+        // Draw overlay
+        const hue = isPatternMatch ? 150 : (patternMatchScore > 30 ? 280 : 200);
+        const alpha = Math.min(motionScore / 40, 0.35);
         ctx.fillStyle = `hsla(${hue}, 70%, 50%, ${alpha})`;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        ctx.strokeStyle = `hsla(${hue}, 80%, 60%, ${Math.min(motionScore / 30, 0.8)})`;
-        ctx.lineWidth = 4;
-        ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+        // Draw matching indicator ring
+        if (isPatternMatch) {
+          ctx.strokeStyle = `hsla(150, 80%, 50%, 0.8)`;
+          ctx.lineWidth = 8;
+          ctx.strokeRect(8, 8, canvas.width - 16, canvas.height - 16);
+        }
       }
     }
 
     prevFrameRef.current = currentFrame;
-    return { motion: motionScore, match: matchScore };
-  }, [calculateMatchScore]);
+    
+    return { motion: motionScore, match: 0, patternMatch: false };
+  }, [motionHistory, calculatePatternMatch]);
 
   const startDetection = useCallback(() => {
     const detect = () => {
-      const { motion, match } = detectMotion();
+      const { motion } = detectMotion();
       
-      setState(prev => ({
-        ...prev,
-        isDetecting: true,
-        motionLevel: motion,
-        matchScore: match,
-      }));
-
       setMotionHistory(prev => {
         const newHistory = [...prev, motion].slice(-30);
+        
+        // Calculate pattern match with updated history
+        const patternMatchScore = calculatePatternMatch(newHistory);
+        const isPatternMatch = patternMatchScore > 60 && motion > 5;
+        
+        setState(prevState => ({
+          ...prevState,
+          isDetecting: true,
+          motionLevel: motion,
+          matchScore: patternMatchScore,
+          patternMatch: isPatternMatch,
+        }));
+        
         return newHistory;
       });
 
@@ -303,7 +283,7 @@ export const useCameraDetection = (referenceFrames?: string[]) => {
     };
     
     detect();
-  }, [detectMotion]);
+  }, [detectMotion, calculatePatternMatch]);
 
   useEffect(() => {
     return () => {
@@ -319,6 +299,6 @@ export const useCameraDetection = (referenceFrames?: string[]) => {
     startCamera,
     stopCamera,
     startDetection,
-    captureFrame,
+    hasLearnedPattern: !!learnedPatternRef.current,
   };
 };

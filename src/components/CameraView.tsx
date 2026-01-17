@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, CameraOff, Loader2, Check, AlertCircle, Sparkles } from 'lucide-react';
+import { Camera, CameraOff, Loader2, Check, AlertCircle, Sparkles, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCameraDetection } from '@/hooks/useCameraDetection';
 
@@ -19,6 +19,8 @@ export const CameraView = ({
   completedCount,
   onActionDetected,
 }: CameraViewProps) => {
+  const safeReferenceFrames = useMemo(() => referenceFrames || [], [referenceFrames]);
+  
   const {
     videoRef,
     canvasRef,
@@ -27,11 +29,12 @@ export const CameraView = ({
     startCamera,
     stopCamera,
     startDetection,
-  } = useCameraDetection(referenceFrames || []);
+    hasLearnedPattern,
+  } = useCameraDetection(safeReferenceFrames);
 
   const [countdown, setCountdown] = useState<number | null>(null);
   const [justCompleted, setJustCompleted] = useState(false);
-  const [detectionProgress, setDetectionProgress] = useState(0);
+  const [matchStreak, setMatchStreak] = useState(0);
 
   const isAllComplete = completedCount >= dailyGoal;
 
@@ -42,46 +45,40 @@ export const CameraView = ({
     }
   }, [state.isActive, state.isLoading, startDetection]);
 
-  // Monitor motion for sustained activity with matching
+  // Track consecutive pattern matches
+  useEffect(() => {
+    if (state.patternMatch) {
+      setMatchStreak(prev => prev + 1);
+    } else {
+      setMatchStreak(0);
+    }
+  }, [state.patternMatch]);
+
+  // Monitor for sustained pattern matching to trigger completion
   useEffect(() => {
     if (isAllComplete || justCompleted) return;
 
-    const recentMotion = motionHistory.slice(-20);
-    if (recentMotion.length < 10) return;
-
-    const avgMotion = recentMotion.reduce((a, b) => a + b, 0) / recentMotion.length;
-    
-    // Combine motion and match score for detection
-    const combinedScore = avgMotion * (1 + state.matchScore / 100);
-    const progress = Math.min(combinedScore / 20, 1) * 100;
-    
-    setDetectionProgress(progress);
-
-    // Trigger when enough motion is detected with good matching
-    const hasEnoughMotion = avgMotion > 8;
-    const hasGoodMatch = state.matchScore > 30 || !referenceFrames || referenceFrames.length === 0;
-    const sustainedActivity = recentMotion.filter(m => m > 6).length > 12;
-
-    if (hasEnoughMotion && hasGoodMatch && sustainedActivity) {
+    // Need sustained pattern match (about 2 seconds of matching)
+    if (matchStreak > 20 && state.matchScore > 55) {
       if (countdown === null) {
         setCountdown(3);
       }
-    } else {
+    } else if (matchStreak < 10) {
       setCountdown(null);
     }
-  }, [motionHistory, state.matchScore, isAllComplete, justCompleted, countdown, referenceFrames]);
+  }, [matchStreak, state.matchScore, isAllComplete, justCompleted, countdown]);
 
   // Countdown timer
   useEffect(() => {
     if (countdown === null) return;
     if (countdown === 0) {
       setJustCompleted(true);
+      setMatchStreak(0);
       onActionDetected();
       
       // Reset after 2 seconds to allow next rep
       setTimeout(() => {
         setJustCompleted(false);
-        setDetectionProgress(0);
       }, 2000);
       setCountdown(null);
       return;
@@ -102,14 +99,41 @@ export const CameraView = ({
     }
   };
 
+  const getStatusMessage = () => {
+    if (!hasLearnedPattern && safeReferenceFrames.length === 0) {
+      return { text: 'No pattern learned - any motion works', color: 'text-muted-foreground' };
+    }
+    if (state.patternMatch) {
+      return { text: '✨ Pattern Matched! Keep going...', color: 'text-success' };
+    }
+    if (state.matchScore > 40) {
+      return { text: 'Getting close! Adjust your movement', color: 'text-warning' };
+    }
+    if (state.motionLevel > 5) {
+      return { text: 'Motion detected, matching pattern...', color: 'text-muted-foreground' };
+    }
+    return { text: 'Perform your learned habit movement', color: 'text-muted-foreground' };
+  };
+
+  const statusMessage = getStatusMessage();
+
   return (
     <div className="glass-card rounded-3xl overflow-hidden">
       {/* Header with rep counter */}
       <div className="p-6 border-b border-border/50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`w-3 h-3 rounded-full ${state.isActive ? 'bg-success animate-pulse' : 'bg-muted'}`} />
+            <div className={`w-3 h-3 rounded-full transition-colors ${
+              state.patternMatch ? 'bg-success animate-pulse' : 
+              state.isActive ? 'bg-primary animate-pulse' : 'bg-muted'
+            }`} />
             <h3 className="font-display font-semibold text-lg">Habit Camera</h3>
+            {hasLearnedPattern && (
+              <span className="px-2 py-0.5 rounded-full bg-primary/20 text-primary text-xs font-medium flex items-center gap-1">
+                <Brain className="w-3 h-3" />
+                Pattern Learned
+              </span>
+            )}
           </div>
           
           {/* Rep counter */}
@@ -158,42 +182,58 @@ export const CameraView = ({
             />
             <canvas
               ref={canvasRef}
-              className="absolute inset-0 w-full h-full object-cover pointer-events-none opacity-50"
+              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+              style={{ mixBlendMode: 'screen', opacity: 0.6 }}
             />
             
             {/* Detection overlay */}
             <div className="absolute inset-0 pointer-events-none">
-              {/* Corner decorations */}
-              <div className="absolute top-4 left-4 w-12 h-12 border-t-2 border-l-2 border-primary/50 rounded-tl-lg" />
-              <div className="absolute top-4 right-4 w-12 h-12 border-t-2 border-r-2 border-primary/50 rounded-tr-lg" />
-              <div className="absolute bottom-4 left-4 w-12 h-12 border-b-2 border-l-2 border-primary/50 rounded-bl-lg" />
-              <div className="absolute bottom-4 right-4 w-12 h-12 border-b-2 border-r-2 border-primary/50 rounded-br-lg" />
+              {/* Corner decorations - color changes based on match */}
+              <div className={`absolute top-4 left-4 w-12 h-12 border-t-2 border-l-2 rounded-tl-lg transition-colors ${
+                state.patternMatch ? 'border-success' : 'border-primary/50'
+              }`} />
+              <div className={`absolute top-4 right-4 w-12 h-12 border-t-2 border-r-2 rounded-tr-lg transition-colors ${
+                state.patternMatch ? 'border-success' : 'border-primary/50'
+              }`} />
+              <div className={`absolute bottom-4 left-4 w-12 h-12 border-b-2 border-l-2 rounded-bl-lg transition-colors ${
+                state.patternMatch ? 'border-success' : 'border-primary/50'
+              }`} />
+              <div className={`absolute bottom-4 right-4 w-12 h-12 border-b-2 border-r-2 rounded-br-lg transition-colors ${
+                state.patternMatch ? 'border-success' : 'border-primary/50'
+              }`} />
 
               {/* Status badge */}
               <div className="absolute top-4 left-1/2 -translate-x-1/2">
-                <div className="px-4 py-2 rounded-full bg-background/80 backdrop-blur-sm text-sm font-medium flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${state.motionLevel > 5 ? 'bg-success' : 'bg-warning'}`} />
-                  {state.motionLevel > 5 ? 
-                    (state.matchScore > 40 ? 'Habit Recognized!' : 'Motion Detected') : 
-                    'Waiting for movement...'}
-                </div>
+                <motion.div 
+                  animate={{ scale: state.patternMatch ? [1, 1.05, 1] : 1 }}
+                  transition={{ repeat: state.patternMatch ? Infinity : 0, duration: 0.5 }}
+                  className={`px-4 py-2 rounded-full bg-background/80 backdrop-blur-sm text-sm font-medium ${statusMessage.color}`}
+                >
+                  {statusMessage.text}
+                </motion.div>
               </div>
 
-              {/* Match indicator */}
-              {referenceFrames.length > 0 && state.motionLevel > 3 && (
+              {/* Match score indicator */}
+              {hasLearnedPattern && state.motionLevel > 3 && (
                 <div className="absolute top-14 left-1/2 -translate-x-1/2">
-                  <div className="px-3 py-1 rounded-full bg-background/60 backdrop-blur-sm text-xs flex items-center gap-2">
-                    <Sparkles className="w-3 h-3 text-accent" />
+                  <div className={`px-3 py-1 rounded-full backdrop-blur-sm text-xs flex items-center gap-2 ${
+                    state.patternMatch ? 'bg-success/80 text-success-foreground' : 'bg-background/60'
+                  }`}>
+                    <Sparkles className="w-3 h-3" />
                     Match: {Math.round(state.matchScore)}%
                   </div>
                 </div>
               )}
 
-              {/* Motion level indicator */}
+              {/* Motion level bar */}
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-48">
                 <div className="h-2 bg-background/50 rounded-full overflow-hidden backdrop-blur-sm">
                   <motion.div
-                    className="h-full bg-gradient-to-r from-primary via-accent to-secondary"
+                    className={`h-full transition-colors ${
+                      state.patternMatch 
+                        ? 'bg-success' 
+                        : 'bg-gradient-to-r from-primary via-accent to-secondary'
+                    }`}
                     animate={{ width: `${Math.min(state.motionLevel * 3, 100)}%` }}
                   />
                 </div>
@@ -206,14 +246,14 @@ export const CameraView = ({
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.8 }}
-                    className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-sm"
+                    className="absolute inset-0 flex items-center justify-center bg-success/30 backdrop-blur-sm"
                   >
                     <motion.div
                       key={countdown}
                       initial={{ scale: 0.5, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       exit={{ scale: 1.5, opacity: 0 }}
-                      className="text-8xl font-display font-bold gradient-text"
+                      className="text-8xl font-display font-bold text-success"
                     >
                       {countdown}
                     </motion.div>
@@ -228,7 +268,7 @@ export const CameraView = ({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="absolute inset-0 flex flex-col items-center justify-center bg-success/20 backdrop-blur-sm"
+                    className="absolute inset-0 flex flex-col items-center justify-center bg-success/30 backdrop-blur-sm"
                   >
                     <motion.div
                       initial={{ scale: 0 }}
@@ -287,6 +327,12 @@ export const CameraView = ({
                 <p className="text-muted-foreground text-center px-8">
                   Enable camera to track your habit automatically
                 </p>
+                {hasLearnedPattern && (
+                  <p className="text-primary text-sm flex items-center gap-1">
+                    <Brain className="w-4 h-4" />
+                    Your movement pattern is ready!
+                  </p>
+                )}
               </>
             )}
           </div>
@@ -297,18 +343,27 @@ export const CameraView = ({
       {state.isActive && !isAllComplete && !justCompleted && (
         <div className="p-4 border-t border-border/50">
           <div className="flex items-center justify-between text-sm mb-2">
-            <span className="text-muted-foreground">Action Detection</span>
-            <span className="font-medium">{Math.round(detectionProgress)}%</span>
+            <span className="text-muted-foreground">
+              {hasLearnedPattern ? 'Pattern Recognition' : 'Motion Detection'}
+            </span>
+            <span className={`font-medium ${state.patternMatch ? 'text-success' : ''}`}>
+              {Math.round(state.matchScore)}%
+            </span>
           </div>
           <div className="h-2 bg-muted rounded-full overflow-hidden">
             <motion.div
-              className="h-full bg-gradient-to-r from-primary via-accent to-secondary"
-              animate={{ width: `${detectionProgress}%` }}
+              className={`h-full transition-colors ${
+                state.patternMatch ? 'bg-success' : 'bg-gradient-to-r from-primary via-accent to-secondary'
+              }`}
+              animate={{ width: `${state.matchScore}%` }}
               transition={{ type: 'spring', damping: 25 }}
             />
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            Perform your habit movement to complete rep {completedCount + 1} of {dailyGoal}
+            {hasLearnedPattern 
+              ? `Perform your learned movement to complete rep ${completedCount + 1} of ${dailyGoal}`
+              : `Move around to complete rep ${completedCount + 1} of ${dailyGoal}`
+            }
           </p>
         </div>
       )}

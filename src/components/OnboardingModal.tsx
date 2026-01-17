@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, ArrowRight, Zap, Camera, Target, Video, Check, RotateCcw } from 'lucide-react';
+import { Sparkles, ArrowRight, Zap, Camera, Target, Video, Check, RotateCcw, Play, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -33,8 +33,8 @@ const steps = [
   {
     id: 'calibration',
     icon: Camera,
-    title: 'Show me your habit!',
-    description: 'Record yourself performing the habit so I can recognize it',
+    title: 'Teach me your habit!',
+    description: 'Record yourself performing the movement so I can learn to recognize it',
   },
 ];
 
@@ -44,8 +44,10 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
   const [habitDescription, setHabitDescription] = useState('');
   const [dailyGoal, setDailyGoal] = useState(1);
   const [isRecording, setIsRecording] = useState(false);
+  const [recordingProgress, setRecordingProgress] = useState(0);
   const [recordedFrames, setRecordedFrames] = useState<string[]>([]);
   const [cameraReady, setCameraReady] = useState(false);
+  const [previewFrame, setPreviewFrame] = useState<string | null>(null);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -96,9 +98,11 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
   const startRecording = () => {
     setIsRecording(true);
     setRecordedFrames([]);
+    setRecordingProgress(0);
     
     let frameCount = 0;
-    const maxFrames = 30; // Capture 30 frames over 3 seconds
+    const maxFrames = 45; // Capture 45 frames over ~4.5 seconds
+    const frames: string[] = [];
     
     recordingIntervalRef.current = setInterval(() => {
       if (videoRef.current && canvasRef.current) {
@@ -107,13 +111,20 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
           canvasRef.current.width = 320;
           canvasRef.current.height = 240;
           ctx.drawImage(videoRef.current, 0, 0, 320, 240);
-          const frame = canvasRef.current.toDataURL('image/jpeg', 0.5);
-          setRecordedFrames(prev => [...prev, frame]);
+          const frame = canvasRef.current.toDataURL('image/jpeg', 0.6);
+          frames.push(frame);
+          setRecordingProgress((frameCount / maxFrames) * 100);
+          
+          // Save middle frame as preview
+          if (frameCount === Math.floor(maxFrames / 2)) {
+            setPreviewFrame(frame);
+          }
         }
       }
       
       frameCount++;
       if (frameCount >= maxFrames) {
+        setRecordedFrames(frames);
         stopRecordingSession();
       }
     }, 100);
@@ -125,10 +136,13 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
       recordingIntervalRef.current = null;
     }
     setIsRecording(false);
+    setRecordingProgress(100);
   };
 
   const resetRecording = () => {
     setRecordedFrames([]);
+    setRecordingProgress(0);
+    setPreviewFrame(null);
   };
 
   const handleNext = () => {
@@ -137,7 +151,7 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
     } else {
       onComplete({
         habitName,
-        habitDescription,
+        habitDescription: habitDescription || habitName,
         dailyGoal,
         referenceFrames: recordedFrames,
         createdAt: new Date().toISOString(),
@@ -149,7 +163,7 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
     if (currentStep === 0) return true;
     if (currentStep === 1) return habitName.trim().length > 0;
     if (currentStep === 2) return dailyGoal >= 1 && dailyGoal <= 10;
-    if (currentStep === 3) return recordedFrames.length >= 20;
+    if (currentStep === 3) return recordedFrames.length >= 30;
     return true;
   };
 
@@ -237,7 +251,7 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
                 {currentStep === 0 && (
                   <div className="grid grid-cols-3 gap-3">
                     {[
-                      { icon: '📷', label: 'Camera Learning' },
+                      { icon: '🧠', label: 'AI Learning' },
                       { icon: '🔥', label: 'Daily Streaks' },
                       { icon: '🎯', label: 'Rep Tracking' },
                     ].map((feature) => (
@@ -268,7 +282,7 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
                       className="bg-muted/50 border-border/50 min-h-20 rounded-xl focus:ring-2 focus:ring-primary/50 resize-none"
                     />
                     <div className="flex flex-wrap gap-2">
-                      {['Push-ups', 'Squats', 'Stretching', 'Meditation'].map((suggestion) => (
+                      {['Push-ups', 'Squats', 'Stretching', 'Jumping Jacks'].map((suggestion) => (
                         <button
                           key={suggestion}
                           onClick={() => setHabitName(suggestion)}
@@ -310,7 +324,7 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
                     <div className="flex items-center gap-2 p-4 rounded-xl bg-secondary/10 border border-secondary/20">
                       <Zap className="w-5 h-5 text-secondary shrink-0" />
                       <p className="text-sm text-muted-foreground">
-                        Complete all {dailyGoal} {dailyGoal === 1 ? 'rep' : 'reps'} to maintain your streak!
+                        Complete all {dailyGoal} {dailyGoal === 1 ? 'rep' : 'reps'} daily to maintain your streak!
                       </p>
                     </div>
                   </div>
@@ -321,33 +335,56 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
                   <div className="space-y-4">
                     {/* Camera preview */}
                     <div className="relative aspect-video bg-muted/30 rounded-2xl overflow-hidden">
-                      <video
-                        ref={videoRef}
-                        className="absolute inset-0 w-full h-full object-cover"
-                        autoPlay
-                        muted
-                        playsInline
-                      />
+                      {recordedFrames.length > 0 && previewFrame ? (
+                        // Show captured preview
+                        <img 
+                          src={previewFrame} 
+                          alt="Captured movement"
+                          className="absolute inset-0 w-full h-full object-cover"
+                        />
+                      ) : (
+                        // Show live camera
+                        <video
+                          ref={videoRef}
+                          className="absolute inset-0 w-full h-full object-cover"
+                          autoPlay
+                          muted
+                          playsInline
+                        />
+                      )}
                       <canvas ref={canvasRef} className="hidden" />
+                      
+                      {/* Recording progress bar */}
+                      {isRecording && (
+                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-muted">
+                          <motion.div 
+                            className="h-full bg-destructive"
+                            animate={{ width: `${recordingProgress}%` }}
+                          />
+                        </div>
+                      )}
                       
                       {/* Recording indicator */}
                       {isRecording && (
                         <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-destructive/90 text-destructive-foreground text-sm font-medium">
                           <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                          Recording... {Math.round(recordedFrames.length / 30 * 100)}%
+                          Recording... {Math.round(recordingProgress)}%
                         </div>
                       )}
 
-                      {/* Frame counter */}
+                      {/* Success indicator */}
                       {recordedFrames.length > 0 && !isRecording && (
                         <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-success/90 text-success-foreground text-sm font-medium">
                           <Check className="w-4 h-4" />
-                          {recordedFrames.length} frames captured
+                          Movement captured!
                         </div>
                       )}
 
                       {/* Corner decorations */}
-                      <div className={`absolute inset-0 pointer-events-none transition-colors ${isRecording ? 'border-4 border-destructive/50' : ''}`}>
+                      <div className={`absolute inset-0 pointer-events-none transition-all ${
+                        isRecording ? 'border-4 border-destructive/70 animate-pulse' : 
+                        recordedFrames.length > 0 ? 'border-4 border-success/50' : ''
+                      }`}>
                         <div className="absolute top-4 left-4 w-12 h-12 border-t-2 border-l-2 border-primary/50 rounded-tl-lg" />
                         <div className="absolute top-4 right-4 w-12 h-12 border-t-2 border-r-2 border-primary/50 rounded-tr-lg" />
                         <div className="absolute bottom-4 left-4 w-12 h-12 border-b-2 border-l-2 border-primary/50 rounded-bl-lg" />
@@ -363,8 +400,17 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
                           disabled={!cameraReady || isRecording}
                           className="flex-1 h-12 rounded-xl bg-destructive hover:bg-destructive/90"
                         >
-                          <Video className="w-5 h-5 mr-2" />
-                          {isRecording ? 'Recording...' : 'Start Recording (3s)'}
+                          {isRecording ? (
+                            <>
+                              <Square className="w-5 h-5 mr-2" />
+                              Recording...
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-5 h-5 mr-2" />
+                              Record Movement (~5s)
+                            </>
+                          )}
                         </Button>
                       ) : (
                         <>
@@ -381,16 +427,18 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
                             className="flex-1 h-12 rounded-xl bg-gradient-to-r from-primary via-accent to-secondary"
                           >
                             <Check className="w-5 h-5 mr-2" />
-                            Looks Good!
+                            Start Tracking!
                           </Button>
                         </>
                       )}
                     </div>
 
-                    <p className="text-xs text-muted-foreground text-center">
-                      Position yourself in view and perform your habit movement. 
-                      I'll learn to recognize it!
-                    </p>
+                    <div className="p-3 rounded-xl bg-primary/10 border border-primary/20">
+                      <p className="text-xs text-center text-muted-foreground">
+                        <span className="text-primary font-medium">💡 Tip:</span> Perform your complete habit movement during recording.
+                        I'll learn the motion pattern to recognize when you do it!
+                      </p>
+                    </div>
                   </div>
                 )}
               </motion.div>
