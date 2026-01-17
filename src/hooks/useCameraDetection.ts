@@ -193,6 +193,8 @@ export const useCameraDetection = (referenceFrames?: string[]) => {
     return Math.min(matchScore, 100);
   }, []);
 
+  const motionHistoryRef = useRef<number[]>([]);
+
   const detectMotion = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return { motion: 0, match: 0, patternMatch: false };
     
@@ -214,14 +216,11 @@ export const useCameraDetection = (referenceFrames?: string[]) => {
       const prev = prevFrameRef.current.data;
       const curr = currentFrame.data;
       let diffPixels = 0;
-      let totalDiff = 0;
       
       for (let i = 0; i < curr.length; i += 16) {
         const rDiff = Math.abs(curr[i] - prev[i]);
         const gDiff = Math.abs(curr[i + 1] - prev[i + 1]);
         const bDiff = Math.abs(curr[i + 2] - prev[i + 2]);
-        const avgDiff = (rDiff + gDiff + bDiff) / 3;
-        totalDiff += avgDiff;
         
         if (rDiff > 25 || gDiff > 25 || bDiff > 25) {
           diffPixels++;
@@ -231,9 +230,9 @@ export const useCameraDetection = (referenceFrames?: string[]) => {
       const totalSamples = curr.length / 16;
       motionScore = (diffPixels / totalSamples) * 100;
 
-      // Visual feedback based on motion and pattern match
+      // Visual feedback based on motion
       if (motionScore > 3) {
-        const recentMotion = [...motionHistory.slice(-20), motionScore];
+        const recentMotion = [...motionHistoryRef.current.slice(-20), motionScore];
         const patternMatchScore = calculatePatternMatch(recentMotion);
         const isPatternMatch = patternMatchScore > 60 && motionScore > 5;
         
@@ -255,29 +254,29 @@ export const useCameraDetection = (referenceFrames?: string[]) => {
     prevFrameRef.current = currentFrame;
     
     return { motion: motionScore, match: 0, patternMatch: false };
-  }, [motionHistory, calculatePatternMatch]);
+  }, [calculatePatternMatch]);
 
   const startDetection = useCallback(() => {
     const detect = () => {
       const { motion } = detectMotion();
       
-      setMotionHistory(prev => {
-        const newHistory = [...prev, motion].slice(-30);
-        
-        // Calculate pattern match with updated history
-        const patternMatchScore = calculatePatternMatch(newHistory);
-        const isPatternMatch = patternMatchScore > 60 && motion > 5;
-        
-        setState(prevState => ({
-          ...prevState,
-          isDetecting: true,
-          motionLevel: motion,
-          matchScore: patternMatchScore,
-          patternMatch: isPatternMatch,
-        }));
-        
-        return newHistory;
-      });
+      // Update motion history ref
+      motionHistoryRef.current = [...motionHistoryRef.current, motion].slice(-30);
+      const newHistory = motionHistoryRef.current;
+      
+      // Calculate pattern match with updated history
+      const patternMatchScore = calculatePatternMatch(newHistory);
+      const isPatternMatch = patternMatchScore > 60 && motion > 5;
+      
+      setState(prevState => ({
+        ...prevState,
+        isDetecting: true,
+        motionLevel: motion,
+        matchScore: patternMatchScore,
+        patternMatch: isPatternMatch,
+      }));
+      
+      setMotionHistory(newHistory);
 
       animationRef.current = requestAnimationFrame(detect);
     };
