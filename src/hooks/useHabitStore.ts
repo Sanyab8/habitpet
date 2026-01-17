@@ -44,13 +44,24 @@ export const useHabitStore = () => {
       try {
         const parsed = JSON.parse(saved);
         const today = getTodayKey();
-        const todayRecord = parsed.dailyRecords?.find((r: DailyRecord) => r.date === today);
+        
+        // Migrate old daily records that don't have completions array
+        const migratedRecords = (parsed.dailyRecords || []).map((r: any) => ({
+          ...r,
+          completedCount: r.completedCount || (r.completed ? 1 : 0),
+          completions: r.completions || (r.completedAt ? [r.completedAt] : []),
+        }));
+        
+        const todayRecord = migratedRecords.find((r: DailyRecord) => r.date === today);
         setState({
           ...parsed,
+          dailyRecords: migratedRecords,
           todayCompletedCount: todayRecord?.completedCount || 0,
         });
       } catch (e) {
         console.error('Failed to parse saved habit data:', e);
+        // Clear corrupted data
+        localStorage.removeItem(STORAGE_KEY);
       }
     }
   }, []);
@@ -97,7 +108,7 @@ export const useHabitStore = () => {
       if (existingRecord) {
         updatedRecords = prev.dailyRecords.map(r => 
           r.date === today 
-            ? { ...r, completedCount: newCount, completions: [...r.completions, newCompletion] }
+            ? { ...r, completedCount: newCount, completions: [...(r.completions || []), newCompletion] }
             : r
         );
       } else {
