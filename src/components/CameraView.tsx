@@ -53,7 +53,7 @@ export const CameraView = ({
     if (state.isActive && !state.isLoading) {
       startDetection();
     }
-  }, [state.isActive, state.isLoading, startDetection]);
+  }, [state.isActive, state.isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track consecutive pattern matches
   useEffect(() => {
