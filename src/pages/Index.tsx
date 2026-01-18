@@ -22,6 +22,9 @@ const Index = () => {
     isTodayComplete,
     resetHabit,
     handleDeadlineExpired,
+    skipDay,
+    resetDemoMode,
+    getDemoDay,
   } = useHabitStore();
 
   const [shouldStopCamera, setShouldStopCamera] = useState(false);
@@ -150,17 +153,41 @@ const Index = () => {
           </motion.div>
         )}
 
-        {/* Duration Editor */}
+        {/* Duration Editor & Demo Controls */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.6 }}
-          className="flex justify-center"
+          className="flex flex-col items-center gap-4"
         >
           <DurationEditor
             currentDuration={habit.movementDuration}
             onDurationChange={updateMovementDuration}
           />
+          
+          {/* Demo Mode Controls */}
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/30 border border-border/30">
+            <span className="text-xs text-muted-foreground">🧪 Demo Mode</span>
+            {getDemoDay() > 0 && (
+              <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">
+                Day +{getDemoDay()}
+              </span>
+            )}
+            <button
+              onClick={skipDay}
+              className="px-3 py-1.5 text-xs rounded-lg bg-primary/20 hover:bg-primary/30 text-primary transition-colors"
+            >
+              ⏩ Skip 24h
+            </button>
+            {getDemoDay() > 0 && (
+              <button
+                onClick={resetDemoMode}
+                className="px-3 py-1.5 text-xs rounded-lg bg-destructive/20 hover:bg-destructive/30 text-destructive transition-colors"
+              >
+                🔄 Reset
+              </button>
+            )}
+          </div>
         </motion.div>
 
         {/* Footer */}
