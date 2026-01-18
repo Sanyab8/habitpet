@@ -3,47 +3,49 @@ import { Lock, Unlock, HelpCircle } from 'lucide-react';
 
 interface MilestoneCardsProps {
   streak: number;
+  petName: string;
 }
 
-const milestones = [
+const getMilestones = (petName: string) => [
   {
     id: 'blink-sound',
     day: 1,
     title: 'Blinking & Sound Unlocked',
-    description: 'Buddy blinks and makes sounds when you complete a rep!',
+    description: `${petName} blinks and makes sounds when you complete a rep!`,
     emoji: '✨🔊',
   },
   {
     id: 'color-change',
     day: 3,
     title: 'Changes Color on Interaction',
-    description: 'Buddy changes color when you interact with it!',
+    description: `${petName} changes color when you interact with it!`,
     emoji: '🌈',
   },
   {
     id: 'wag-tail',
     day: 7,
     title: 'Wags Tail & New Sound',
-    description: 'Buddy wags its tail and unlocks a new excited sound!',
+    description: `${petName} wags its tail and unlocks a new excited sound!`,
     emoji: '🐕💫',
   },
   {
     id: 'petting',
     day: 14,
     title: 'Reacts to Petting',
-    description: 'Buddy responds to gentle petting with happy reactions!',
+    description: `${petName} responds to gentle petting with happy reactions!`,
     emoji: '🤗💕',
   },
   {
     id: 'everything',
     day: 30,
     title: 'Everything Unlocked',
-    description: 'All of Buddy\'s abilities are now fully unlocked!',
+    description: `All of ${petName}'s abilities are now fully unlocked!`,
     emoji: '🎉🏆',
   },
 ];
 
-export const MilestoneCards = ({ streak }: MilestoneCardsProps) => {
+export const MilestoneCards = ({ streak, petName }: MilestoneCardsProps) => {
+  const milestones = getMilestones(petName);
   // Find the index of the next milestone to unlock
   const nextMilestoneIndex = milestones.findIndex(m => streak < m.day);
   

@@ -25,6 +25,12 @@ const steps = [
     description: 'Enter the habit you want to track daily',
   },
   {
+    id: 'petname',
+    icon: Sparkles,
+    title: 'Name your buddy!',
+    description: 'Give your virtual pet companion a name',
+  },
+  {
     id: 'frequency',
     icon: Zap,
     title: 'How many times per day?',
@@ -48,6 +54,7 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
   const [currentStep, setCurrentStep] = useState(0);
   const [habitName, setHabitName] = useState('');
   const [habitDescription, setHabitDescription] = useState('');
+  const [petName, setPetName] = useState('Buddy');
   const [dailyGoal, setDailyGoal] = useState(1);
   const [movementDuration, setMovementDuration] = useState(30); // seconds
   const [isRecording, setIsRecording] = useState(false);
@@ -61,9 +68,9 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
   const streamRef = useRef<MediaStream | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Start camera when on calibration step (now step 4)
+  // Start camera when on calibration step (now step 5)
   useEffect(() => {
-    if (currentStep === 4 && isOpen) {
+    if (currentStep === 5 && isOpen) {
       startCamera();
     } else {
       stopCamera();
@@ -170,6 +177,7 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
       onComplete({
         habitName,
         habitDescription: habitDescription || habitName,
+        petName: petName || 'Buddy',
         dailyGoal,
         movementDuration,
         referenceFrames: recordedFrames,
@@ -181,9 +189,10 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
   const canProceed = () => {
     if (currentStep === 0) return true;
     if (currentStep === 1) return habitName.trim().length > 0;
-    if (currentStep === 2) return dailyGoal >= 1 && dailyGoal <= 10;
-    if (currentStep === 3) return movementDuration >= 5;
-    if (currentStep === 4) return recordedFrames.length >= 30;
+    if (currentStep === 2) return petName.trim().length > 0;
+    if (currentStep === 3) return dailyGoal >= 1 && dailyGoal <= 10;
+    if (currentStep === 4) return movementDuration >= 5;
+    if (currentStep === 5) return recordedFrames.length >= 30;
     return true;
   };
 
@@ -315,8 +324,41 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
                   </div>
                 )}
 
-                {/* Step 2: Frequency */}
+                {/* Step 2: Pet Name */}
                 {currentStep === 2 && (
+                  <div className="space-y-4">
+                    <Input
+                      placeholder="e.g., Buddy, Sparky, Luna..."
+                      value={petName}
+                      onChange={(e) => setPetName(e.target.value)}
+                      className="bg-muted/50 border-border/50 text-lg h-14 rounded-xl focus:ring-2 focus:ring-primary/50"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      {['Buddy', 'Sparky', 'Luna', 'Max', 'Coco', 'Milo'].map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          onClick={() => setPetName(suggestion)}
+                          className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
+                            petName === suggestion
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2 p-4 rounded-xl bg-primary/10 border border-primary/20">
+                      <span className="text-2xl">🐾</span>
+                      <p className="text-sm text-muted-foreground">
+                        {petName || 'Your buddy'} will grow and unlock new abilities as you build your streak!
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 3: Frequency */}
+                {currentStep === 3 && (
                   <div className="space-y-6">
                     <div className="flex items-center justify-center gap-6">
                       <button
@@ -350,8 +392,8 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
                   </div>
                 )}
 
-                {/* Step 3: Movement Duration */}
-                {currentStep === 3 && (
+                {/* Step 4: Movement Duration */}
+                {currentStep === 4 && (
                   <div className="space-y-6">
                     <div className="flex items-center justify-center gap-4">
                       <button
@@ -428,8 +470,8 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
                   </div>
                 )}
 
-                {/* Step 4: Calibration */}
-                {currentStep === 4 && (
+                {/* Step 5: Calibration */}
+                {currentStep === 5 && (
                   <div className="space-y-4">
                     {/* Camera preview */}
                     <div className="relative aspect-video bg-muted/30 rounded-2xl overflow-hidden">
