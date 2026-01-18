@@ -38,14 +38,11 @@ export const CameraView = ({
 
   const isAllComplete = completedCount >= dailyGoal;
 
-  // Auto-start camera on mount - delay slightly to ensure video element is attached
+  // Auto-start camera on mount
   useEffect(() => {
     let mounted = true;
     
     const initCamera = async () => {
-      // Small delay to ensure video element is in DOM
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
       if (!isAllComplete && mounted) {
         console.log('[CameraView] Starting camera...');
         const success = await startCamera();
@@ -53,19 +50,19 @@ export const CameraView = ({
         
         // Start detection immediately after camera starts
         if (success && mounted) {
-          setTimeout(() => {
-            console.log('[CameraView] Starting detection...');
-            startDetection();
-          }, 200);
+          console.log('[CameraView] Starting detection...');
+          startDetection();
         }
       }
     };
     
-    initCamera();
+    // Small delay to ensure component is fully mounted
+    const timer = setTimeout(initCamera, 50);
     
     return () => {
       console.log('[CameraView] Cleanup - stopping camera');
       mounted = false;
+      clearTimeout(timer);
       stopCamera();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -196,21 +193,22 @@ export const CameraView = ({
 
       {/* Camera Feed */}
       <div className="relative aspect-video bg-muted/30">
+        {/* Always render video/canvas so refs are available - hide when not active */}
+        <video
+          ref={videoRef}
+          className={`absolute inset-0 w-full h-full object-cover ${state.isActive ? '' : 'hidden'}`}
+          autoPlay
+          muted
+          playsInline
+        />
+        <canvas
+          ref={canvasRef}
+          className={`absolute inset-0 w-full h-full object-cover pointer-events-none ${state.isActive ? '' : 'hidden'}`}
+          style={{ mixBlendMode: 'screen', opacity: 0.6 }}
+        />
+        
         {state.isActive ? (
           <>
-            <video
-              ref={videoRef}
-              className="absolute inset-0 w-full h-full object-cover"
-              autoPlay
-              muted
-              playsInline
-            />
-            <canvas
-              ref={canvasRef}
-              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-              style={{ mixBlendMode: 'screen', opacity: 0.6 }}
-            />
-            
             {/* Detection overlay */}
             <div className="absolute inset-0 pointer-events-none">
               {/* Corner decorations - color changes based on match */}
