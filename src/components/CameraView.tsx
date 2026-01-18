@@ -40,18 +40,29 @@ export const CameraView = ({
 
   // Auto-start camera on mount
   useEffect(() => {
-    if (!isAllComplete) {
-      startCamera();
-    }
+    let mounted = true;
+    
+    const initCamera = async () => {
+      if (!isAllComplete && mounted) {
+        await startCamera();
+      }
+    };
+    
+    initCamera();
+    
     return () => {
-      stopCamera();
+      mounted = false;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Start detection when camera is active
   useEffect(() => {
     if (state.isActive && !state.isLoading) {
-      startDetection();
+      // Small delay to ensure video is ready
+      const timer = setTimeout(() => {
+        startDetection();
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [state.isActive, state.isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -256,7 +256,17 @@ export const useCameraDetection = (referenceFrames?: string[]) => {
     return { motion: motionScore, match: 0, patternMatch: false };
   }, [calculatePatternMatch]);
 
+  const stopDetection = useCallback(() => {
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+  }, []);
+
   const startDetection = useCallback(() => {
+    // Prevent multiple detection loops
+    if (animationRef.current) return;
+    
     const detect = () => {
       const { motion } = detectMotion();
       
@@ -284,11 +294,19 @@ export const useCameraDetection = (referenceFrames?: string[]) => {
     detect();
   }, [detectMotion, calculatePatternMatch]);
 
+  // Cleanup on unmount only - no dependencies to prevent re-running
   useEffect(() => {
     return () => {
-      stopCamera();
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
     };
-  }, [stopCamera]);
+  }, []);
 
   return {
     videoRef,
