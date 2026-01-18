@@ -15,10 +15,11 @@ import {
 
 interface HabitHeaderProps {
   habitName: string;
+  petName: string;
   onReset: () => void;
 }
 
-export const HabitHeader = ({ habitName, onReset }: HabitHeaderProps) => {
+export const HabitHeader = ({ habitName, petName, onReset }: HabitHeaderProps) => {
   return (
     <motion.header
       initial={{ opacity: 0, y: -20 }}
@@ -36,9 +37,12 @@ export const HabitHeader = ({ habitName, onReset }: HabitHeaderProps) => {
         </motion.div>
         <div>
           <h1 className="text-3xl font-display font-bold gradient-text">
-            Habit Buddy
+            Habpet
           </h1>
           <p className="text-muted-foreground">
+            Name: <span className="text-foreground font-medium">{petName}</span>
+          </p>
+          <p className="text-muted-foreground text-sm">
             Tracking: <span className="text-foreground font-medium">{habitName}</span>
           </p>
         </div>
