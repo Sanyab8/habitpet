@@ -4,6 +4,7 @@ export interface HabitData {
   habitName: string;
   habitDescription: string;
   dailyGoal: number;
+  deadlineTime: string; // HH:MM format, e.g., "21:00"
   referenceFrames: string[]; // Base64 encoded reference frames from calibration
   createdAt: string;
 }

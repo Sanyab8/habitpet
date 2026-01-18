@@ -76,7 +76,8 @@ const Index = () => {
         {/* Countdown Timer */}
         <CountdownTimer 
           dailyGoal={habit.dailyGoal} 
-          completedCount={todayCompletedCount} 
+          completedCount={todayCompletedCount}
+          deadlineTime={habit.deadlineTime}
         />
 
         {/* Main grid */}

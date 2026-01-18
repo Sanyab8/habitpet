@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, ArrowRight, Zap, Camera, Target, Video, Check, RotateCcw, Play, Square } from 'lucide-react';
+import { Sparkles, ArrowRight, Zap, Camera, Target, Video, Check, RotateCcw, Play, Square, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -31,6 +31,12 @@ const steps = [
     description: 'Set your daily goal for this habit',
   },
   {
+    id: 'deadline',
+    icon: Clock,
+    title: 'Set your daily deadline',
+    description: 'When should you complete your reps by?',
+  },
+  {
     id: 'calibration',
     icon: Camera,
     title: 'Teach me your habit!',
@@ -43,6 +49,7 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
   const [habitName, setHabitName] = useState('');
   const [habitDescription, setHabitDescription] = useState('');
   const [dailyGoal, setDailyGoal] = useState(1);
+  const [deadlineTime, setDeadlineTime] = useState('23:59');
   const [isRecording, setIsRecording] = useState(false);
   const [recordingProgress, setRecordingProgress] = useState(0);
   const [recordedFrames, setRecordedFrames] = useState<string[]>([]);
@@ -54,9 +61,9 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
   const streamRef = useRef<MediaStream | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Start camera when on calibration step
+  // Start camera when on calibration step (now step 4)
   useEffect(() => {
-    if (currentStep === 3 && isOpen) {
+    if (currentStep === 4 && isOpen) {
       startCamera();
     } else {
       stopCamera();
@@ -153,6 +160,7 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
         habitName,
         habitDescription: habitDescription || habitName,
         dailyGoal,
+        deadlineTime,
         referenceFrames: recordedFrames,
         createdAt: new Date().toISOString(),
       });
@@ -163,7 +171,8 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
     if (currentStep === 0) return true;
     if (currentStep === 1) return habitName.trim().length > 0;
     if (currentStep === 2) return dailyGoal >= 1 && dailyGoal <= 10;
-    if (currentStep === 3) return recordedFrames.length >= 30;
+    if (currentStep === 3) return deadlineTime.length > 0;
+    if (currentStep === 4) return recordedFrames.length >= 30;
     return true;
   };
 
@@ -330,8 +339,56 @@ export const OnboardingModal = ({ isOpen, onComplete }: OnboardingModalProps) =>
                   </div>
                 )}
 
-                {/* Step 3: Calibration */}
+                {/* Step 3: Deadline */}
                 {currentStep === 3 && (
+                  <div className="space-y-6">
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="relative">
+                        <input
+                          type="time"
+                          value={deadlineTime}
+                          onChange={(e) => setDeadlineTime(e.target.value)}
+                          className="text-4xl font-display font-bold bg-muted/50 border border-border/50 rounded-xl px-6 py-4 text-center focus:ring-2 focus:ring-primary/50 focus:outline-none"
+                        />
+                      </div>
+                      <p className="text-muted-foreground">
+                        Complete your reps by this time each day
+                      </p>
+                    </div>
+                    
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {[
+                        { label: 'Morning', time: '09:00' },
+                        { label: 'Noon', time: '12:00' },
+                        { label: 'Evening', time: '18:00' },
+                        { label: 'Night', time: '21:00' },
+                        { label: 'Midnight', time: '23:59' },
+                      ].map((preset) => (
+                        <button
+                          key={preset.time}
+                          onClick={() => setDeadlineTime(preset.time)}
+                          className={`px-4 py-2 text-sm rounded-full transition-colors ${
+                            deadlineTime === preset.time
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-2 p-4 rounded-xl bg-primary/10 border border-primary/20">
+                      <Clock className="w-5 h-5 text-primary shrink-0" />
+                      <p className="text-sm text-muted-foreground">
+                        The countdown will reset at midnight and count down to your deadline
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 4: Calibration */}
+                {currentStep === 4 && (
                   <div className="space-y-4">
                     {/* Camera preview */}
                     <div className="relative aspect-video bg-muted/30 rounded-2xl overflow-hidden">
