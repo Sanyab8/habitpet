@@ -10,6 +10,7 @@ interface CameraViewProps {
   dailyGoal: number;
   completedCount: number;
   movementDuration?: number;
+  shouldStopCamera?: boolean;
   onActionDetected: () => void;
 }
 
@@ -19,6 +20,7 @@ export const CameraView = ({
   dailyGoal,
   completedCount,
   movementDuration = 30,
+  shouldStopCamera = false,
   onActionDetected,
 }: CameraViewProps) => {
   const safeReferenceFrames = useMemo(() => referenceFrames || [], [referenceFrames]);
@@ -45,6 +47,13 @@ export const CameraView = ({
       stopCamera();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Stop camera when parent requests it
+  useEffect(() => {
+    if (shouldStopCamera && state.isActive) {
+      stopCamera();
+    }
+  }, [shouldStopCamera, state.isActive, stopCamera]);
 
   const handleStartCamera = async () => {
     const success = await startCamera();
