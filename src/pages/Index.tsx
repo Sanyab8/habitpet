@@ -153,7 +153,7 @@ const Index = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
         >
-          <MilestoneCards streak={streak} />
+          <MilestoneCards streak={streak} petName={habit.petName} />
         </motion.section>
 
         {/* Action buttons */}

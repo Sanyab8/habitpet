@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 export interface HabitData {
   habitName: string;
   habitDescription: string;
+  petName: string;
   dailyGoal: number;
   movementDuration: number; // Duration in seconds for each rep
   referenceFrames: string[]; // Base64 encoded reference frames from calibration
