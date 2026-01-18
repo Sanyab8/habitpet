@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { useHabitStore } from '@/hooks/useHabitStore';
@@ -20,6 +20,8 @@ const Index = () => {
     isTodayComplete,
     resetHabit,
   } = useHabitStore();
+
+  const [shouldStopCamera, setShouldStopCamera] = useState(false);
 
   const handleActionDetected = () => {
     const wasComplete = isTodayComplete();
@@ -97,6 +99,7 @@ const Index = () => {
             dailyGoal={habit.dailyGoal}
             completedCount={todayCompletedCount}
             movementDuration={habit.movementDuration}
+            shouldStopCamera={shouldStopCamera}
             onActionDetected={handleActionDetected}
           />
         </div>
@@ -129,7 +132,8 @@ const Index = () => {
             {todayCompletedCount >= 1 && (
               <button
                 onClick={() => {
-                  // Just navigate away or show completion message
+                  // Stop camera and scroll up
+                  setShouldStopCamera(true);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
                 className="px-6 py-3 rounded-2xl bg-success/20 hover:bg-success/30 text-success hover:text-success transition-colors text-sm border border-success/30"
