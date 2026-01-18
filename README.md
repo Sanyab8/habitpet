@@ -144,18 +144,6 @@ Adjust how long you need to hold a movement to complete a rep (default: 30 secon
 
 Set during onboarding. To change, reset your habit and start fresh.
 
-## 🌐 Deployment
-
-### Using Lovable
-
-Simply open your [Lovable Project](https://lovable.dev) and click on **Share → Publish**.
-
-### Custom Domain
-
-To connect a domain, navigate to **Project → Settings → Domains** and click **Connect Domain**.
-
-Read more: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
-
 ## 📄 License
 
 MIT License — feel free to use, modify, and distribute.
