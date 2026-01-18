@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { format } from 'date-fns';
 import { useHabitStore } from '@/hooks/useHabitStore';
+import { useArduino } from '@/hooks/useArduino'; // ADD THIS
 import { OnboardingModal } from '@/components/OnboardingModal';
 import { HabitHeader } from '@/components/HabitHeader';
 import { CountdownTimer } from '@/components/CountdownTimer';
@@ -30,10 +31,12 @@ const Index = () => {
     getTimeRemaining,
   } = useHabitStore();
 
+  // ADD ARDUINO HOOK
+  const { isConnected, arduinoStreak, notifyHabitComplete } = useArduino();
+
   const [shouldStopCamera, setShouldStopCamera] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState({ hours: 0, minutes: 0, seconds: 0 });
 
-  // Update time remaining every second
   useEffect(() => {
     const updateTime = () => {
       const remaining = getTimeRemaining();
@@ -56,7 +59,7 @@ const Index = () => {
       colors: ['#a855f7', '#ec4899', '#00d4aa'],
     });
 
-    // Extra confetti when completing all reps
+    // Extra confetti + Arduino notification when completing all reps
     if (!wasComplete && habit && todayCompletedCount + 1 >= habit.dailyGoal) {
       setTimeout(() => {
         confetti({
@@ -65,6 +68,9 @@ const Index = () => {
           origin: { y: 0.5 },
           colors: ['#a855f7', '#ec4899', '#00d4aa', '#fbbf24'],
         });
+        
+        // NOTIFY ARDUINO CAT BUDDY
+        notifyHabitComplete();
       }, 300);
     }
   };
@@ -72,7 +78,6 @@ const Index = () => {
   if (!habit) {
     return (
       <div className="min-h-screen relative overflow-hidden">
-        {/* Background effects */}
         <div className="fixed inset-0 pointer-events-none">
           <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-primary/20 rounded-full blur-[120px]" />
           <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-secondary/20 rounded-full blur-[100px]" />
@@ -86,15 +91,30 @@ const Index = () => {
 
   return (
     <div className="min-h-screen relative overflow-hidden">
-      {/* Background effects */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-primary/10 rounded-full blur-[120px]" />
         <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-secondary/10 rounded-full blur-[100px]" />
       </div>
 
-      {/* Main content */}
       <div className="relative max-w-6xl mx-auto p-6 space-y-8">
         <HabitHeader habitName={habit.habitName} petName={habit.petName} onReset={resetHabit} />
+
+        {/* ADD ARDUINO STATUS INDICATOR */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex items-center justify-center gap-3 p-3 rounded-xl bg-muted/30 border border-border/30"
+        >
+          <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+          <span className="text-sm font-medium">
+            {isConnected ? '🐱 Cat Buddy Connected' : '🐱 Cat Buddy Offline'}
+          </span>
+          {isConnected && (
+            <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded-full">
+              Arduino Streak: {arduinoStreak}
+            </span>
+          )}
+        </motion.div>
 
         {/* Date & Time Display */}
         <motion.div
@@ -115,7 +135,6 @@ const Index = () => {
           </div>
         </motion.div>
 
-        {/* Countdown Timer */}
         <CountdownTimer 
           dailyGoal={habit.dailyGoal} 
           completedCount={todayCompletedCount}
@@ -125,9 +144,7 @@ const Index = () => {
           }}
         />
 
-        {/* Main grid */}
         <div className="grid lg:grid-cols-2 gap-6">
-          {/* Left column - Streak */}
           <StreakDisplay
             streak={streak}
             longestStreak={longestStreak}
@@ -135,7 +152,6 @@ const Index = () => {
             completedCount={todayCompletedCount}
           />
 
-          {/* Right column - Camera */}
           <CameraView
             habitDescription={habit.habitDescription || habit.habitName}
             referenceFrames={habit.referenceFrames}
@@ -147,7 +163,6 @@ const Index = () => {
           />
         </div>
 
-        {/* Milestones */}
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -156,7 +171,6 @@ const Index = () => {
           <MilestoneCards streak={streak} petName={habit.petName} />
         </motion.section>
 
-        {/* Action buttons */}
         {!isTodayComplete() && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -171,11 +185,9 @@ const Index = () => {
               Camera not working? Click for manual check-in ({todayCompletedCount + 1}/{habit.dailyGoal})
             </button>
             
-            {/* Save & Leave button - only show if at least 1 rep done */}
             {todayCompletedCount >= 1 && (
               <button
                 onClick={() => {
-                  // Stop camera and scroll up
                   setShouldStopCamera(true);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
@@ -187,7 +199,6 @@ const Index = () => {
           </motion.div>
         )}
 
-        {/* Duration Editor & Demo Controls */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -199,7 +210,6 @@ const Index = () => {
             onDurationChange={updateMovementDuration}
           />
           
-          {/* Demo Mode Controls */}
           <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/30 border border-border/30">
             <span className="text-xs text-muted-foreground">🧪 Demo Mode</span>
             {getDemoDay() > 0 && (
@@ -224,7 +234,6 @@ const Index = () => {
           </div>
         </motion.div>
 
-        {/* Footer */}
         <footer className="text-center text-sm text-muted-foreground pt-8 pb-4">
           <p>Built with AI-powered motion detection • Keep showing up! 🔥</p>
         </footer>
