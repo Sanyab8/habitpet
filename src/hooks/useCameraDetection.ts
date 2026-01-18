@@ -129,32 +129,33 @@ export const useCameraDetection = (referenceFrames?: string[]) => {
 
       streamRef.current = stream;
 
-      // Wait for video element to be available
-      let attempts = 0;
-      while (!videoRef.current && attempts < 20) {
-        await new Promise(resolve => setTimeout(resolve, 50));
-        attempts++;
-      }
-      
-      console.log('[Camera] Video ref available:', !!videoRef.current, 'after attempts:', attempts);
-
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         
-        // Wait for video to be ready
-        await new Promise<void>((resolve) => {
+        // Wait for video to be ready to play
+        await new Promise<void>((resolve, reject) => {
           const video = videoRef.current!;
+          const timeout = setTimeout(() => reject(new Error('Video load timeout')), 5000);
+          
           if (video.readyState >= 2) {
+            clearTimeout(timeout);
             resolve();
           } else {
-            video.onloadeddata = () => resolve();
+            video.onloadeddata = () => {
+              clearTimeout(timeout);
+              resolve();
+            };
+            video.onerror = () => {
+              clearTimeout(timeout);
+              reject(new Error('Video load error'));
+            };
           }
         });
         
         await videoRef.current.play();
         console.log('[Camera] Video playing, readyState:', videoRef.current.readyState);
       } else {
-        console.error('[Camera] Video element not found after waiting');
+        console.error('[Camera] Video element not found');
         throw new Error('Video element not available');
       }
 
