@@ -5,9 +5,10 @@ import { Clock, AlertTriangle, PartyPopper } from 'lucide-react';
 interface CountdownTimerProps {
   dailyGoal: number;
   completedCount: number;
+  deadlineTime?: string; // HH:MM format
 }
 
-export const CountdownTimer = ({ dailyGoal, completedCount }: CountdownTimerProps) => {
+export const CountdownTimer = ({ dailyGoal, completedCount, deadlineTime = '23:59' }: CountdownTimerProps) => {
   const [timeRemaining, setTimeRemaining] = useState({
     hours: 0,
     minutes: 0,
@@ -19,10 +20,14 @@ export const CountdownTimer = ({ dailyGoal, completedCount }: CountdownTimerProp
   useEffect(() => {
     const updateTimer = () => {
       const now = new Date();
-      const midnight = new Date();
-      midnight.setHours(23, 59, 59, 999);
-      const diff = midnight.getTime() - now.getTime();
-
+      const [deadlineHours, deadlineMinutes] = deadlineTime.split(':').map(Number);
+      
+      const deadline = new Date();
+      deadline.setHours(deadlineHours, deadlineMinutes, 0, 0);
+      
+      // If deadline has passed for today, show zeros
+      let diff = deadline.getTime() - now.getTime();
+      
       if (diff <= 0) {
         setTimeRemaining({ hours: 0, minutes: 0, seconds: 0 });
         return;
@@ -38,7 +43,7 @@ export const CountdownTimer = ({ dailyGoal, completedCount }: CountdownTimerProp
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [deadlineTime]);
 
   const isUrgent = timeRemaining.hours < 2 && !isComplete;
   const formatNumber = (n: number) => String(n).padStart(2, '0');
@@ -114,7 +119,7 @@ export const CountdownTimer = ({ dailyGoal, completedCount }: CountdownTimerProp
       <p className="text-sm text-muted-foreground mt-3">
         {isUrgent
           ? `Complete ${dailyGoal - completedCount} more rep${dailyGoal - completedCount > 1 ? 's' : ''} to save your streak!`
-          : `Complete all ${dailyGoal} reps before midnight`}
+          : `Complete all ${dailyGoal} reps before ${deadlineTime}`}
       </p>
     </motion.div>
   );
