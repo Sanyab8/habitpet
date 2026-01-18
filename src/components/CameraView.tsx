@@ -89,13 +89,16 @@ export const CameraView = ({
     }
   }, [state.patternMatch, state.matchScore, state.motionLevel]);
 
-  // Monitor for sustained matching to start rep timer
+  // Start the rep timer immediately when the UI shows ~100% match
   useEffect(() => {
     if (isAllComplete || justCompleted) return;
+    if (repTimer !== null) return;
 
-    const readyToTrigger = matchStreak > 12 && state.matchScore > 50;
+    // The UI rounds the score, so treat 99%+ as "100%" for instant start.
+    const instantTrigger = state.matchScore >= 99;
+    const sustainedTrigger = matchStreak > 12 && state.matchScore > 50;
 
-    if (readyToTrigger && repTimer === null) {
+    if (instantTrigger || sustainedTrigger) {
       setRepTimer(movementDuration);
     }
   }, [matchStreak, state.matchScore, isAllComplete, justCompleted, repTimer, movementDuration]);
