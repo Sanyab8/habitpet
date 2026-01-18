@@ -90,9 +90,10 @@ export const CameraView = ({
     }
   }, [matchStreak, state.matchScore, isAllComplete, justCompleted, repTimer, movementDuration]);
 
-  // Rep timer countdown - complete immediately when timer hits 0
+  // Rep timer countdown - use interval for reliable countdown
   useEffect(() => {
     if (repTimer === null) return;
+    
     if (repTimer === 0) {
       // Complete the rep immediately
       setJustCompleted(true);
@@ -106,12 +107,19 @@ export const CameraView = ({
       return;
     }
 
-    const timer = setTimeout(() => {
-      setRepTimer(repTimer - 1);
+    // Use setInterval for more reliable countdown
+    const interval = setInterval(() => {
+      setRepTimer(prev => {
+        if (prev === null || prev <= 0) {
+          clearInterval(interval);
+          return prev;
+        }
+        return prev - 1;
+      });
     }, 1000);
 
-    return () => clearTimeout(timer);
-  }, [repTimer, onActionDetected]);
+    return () => clearInterval(interval);
+  }, [repTimer === null, onActionDetected]); // Only re-run when timer starts/stops
 
   const handleToggleCamera = async () => {
     if (state.isActive) {
