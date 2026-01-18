@@ -12,193 +12,61 @@ A habit tracking app that uses your webcam to detect when you complete your dail
 - **Offline First** — All data stored locally in your browser
 - **Privacy Focused** — No video is ever uploaded; everything runs locally
 
-## 🧠 How the Motion Detection Works
+## 🧠 How It Works
 
 HabPet uses **local computer vision** — no cloud AI, no machine learning models. Everything runs in your browser using standard Web APIs.
 
 ### The Algorithm
 
-| Phase | What Happens |
-|-------|--------------|
-| **Recording** | Captures ~30 frames while you perform your habit during onboarding |
-| **Learning** | Compares consecutive frames pixel-by-pixel to build a "motion signature" |
-| **Detection** | Webcam frames are compared in real-time using frame-differencing |
-| **Matching** | Your live motion is scored against the learned signature |
+| Phase         | What Happens                                                                                          |
+| ------------- | ----------------------------------------------------------------------------------------------------- |
+| **Recording** | Captures ~30 frames while you perform your habit during onboarding                                    |
+| **Learning**  | Compares consecutive frames pixel-by-pixel to build a "motion signature" (intensity, peaks, duration) |
+| **Detection** | Webcam frames are compared in real-time using the same frame-differencing technique                   |
+| **Matching**  | Your live motion is scored against the learned signature based on intensity and peak similarity       |
 
-### Step-by-Step Breakdown
+### Technical Details
 
-#### 1. Pattern Learning (`learnPatternFromFrames`)
-When you record your habit during onboarding:
-```
-For each pair of consecutive frames:
-  1. Load frame onto a 160×120 canvas (downscaled for performance)
-  2. Compare RGB values of each pixel to the previous frame
-  3. Calculate the average difference → "motion intensity"
-  4. Store the sequence of intensities as the pattern
-```
+- **Frame Differencing**: Compares RGB pixel values between consecutive frames; pixels with >25 difference in any channel count as "changed"
+- **Motion Score**: Percentage of changed pixels (sampled every 16th pixel for performance)
+- **Pattern Matching**: Lenient comparison — requires ~20% of learned intensity and rough similarity to peaks
+- **Match Threshold**: >40% similarity score + active motion = pattern detected; 99%+ starts the rep timer
+- **Performance**: Runs at ~60fps using `requestAnimationFrame`, processes downscaled frames
 
-The result is a `MotionPattern` object:
-```typescript
-{
-  motionSequence: number[],  // Array of motion values between frames
-  avgIntensity: number,      // Average movement strength
-  peakMotion: number,        // Highest spike of movement
-  duration: number           // Number of frame comparisons
-}
-```
+### Privacy
 
-#### 2. Live Detection (`detectMotion`)
-Runs ~60 times per second via `requestAnimationFrame`:
-```
-1. Capture current webcam frame
-2. Compare to previous frame pixel-by-pixel
-3. Count pixels where RGB difference > 25 (motion threshold)
-4. Calculate: motionScore = (changedPixels / totalPixels) × 100
-5. Draw visual overlay based on detection state
-```
+All processing happens locally in your browser. Video frames are never uploaded or stored permanently. Reference frames are saved as base64 in localStorage for pattern matching only.
 
-#### 3. Pattern Matching (`calculatePatternMatch`)
-Compares your live motion to the learned pattern:
-```
-1. Take last 20-30 motion values from history
-2. Compare average intensity (within 3× range = match)
-3. Compare peak motion (within 4× range = match)
-4. Check activity level (>20% of learned intensity = bonus)
-5. Weighted combination → matchScore (0-100%)
-```
-
-The scoring formula:
-```
-matchScore = (intensityScore × 0.25) + (peakScore × 0.25) + (activityBonus × 0.5)
-```
-
-#### 4. Rep Completion
-```
-If matchScore >= 99%:
-  → Start countdown timer (default 30 seconds)
-  
-While timer running:
-  If matchScore drops below 99%:
-    → Pause timer immediately
-  
-When timer reaches 0:
-  → Rep complete! Increment count, trigger confetti
-```
-
-### Why Frame Differencing?
-
-Frame differencing is simple but effective for this use case:
-- **Fast**: No ML model loading, runs at 60fps
-- **Private**: All processing stays in browser
-- **Lightweight**: Only compares pixel values, minimal CPU
-- **Good enough**: Detects "movement similar to what you recorded"
-
-It's not recognizing *what* you're doing (like pose estimation would), but rather *how much* you're moving and whether that movement *feels similar* to your recording.
-
-## 🏗️ Code Architecture
+## 🏗️ Architecture
 
 ```
-src/
-├── pages/
-│   └── Index.tsx              # Main app orchestrator
-├── hooks/
-│   ├── useHabitStore.ts       # State management + localStorage
-│   └── useCameraDetection.ts  # All motion detection logic
-├── components/
-│   ├── CameraView.tsx         # Camera UI + rep timer
-│   ├── OnboardingModal.tsx    # Setup wizard + recording
-│   ├── StreakDisplay.tsx      # Streak visualization
-│   ├── CountdownTimer.tsx     # Daily deadline timer
-│   ├── MilestoneCards.tsx     # Achievement cards
-│   └── DurationEditor.tsx     # Rep duration settings
-└── assets/
-    └── habpet-icon.png        # App icon
+┌─────────────────────────────────────────────────────────────────┐
+│                           Index.tsx                             │
+│                    (Main Page / Orchestrator)                   │
+├─────────────────────────────────────────────────────────────────┤
+│  useHabitStore()          │           CameraView.tsx            │
+│  - Habit data             │           - Video/canvas refs       │
+│  - Streak tracking        │           - UI overlays             │
+│  - Daily records          │           - Rep timer               │
+│  - LocalStorage sync      │                 │                   │
+│         │                 │                 ▼                   │
+│         ▼                 │      useCameraDetection()           │
+│  OnboardingModal          │      - Frame differencing           │
+│  - Habit setup            │      - Pattern learning             │
+│  - Reference recording    │      - Motion matching              │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Data Flow
+### Key Files
 
-```
-User opens app
-       │
-       ▼
-┌──────────────────┐
-│  useHabitStore   │ ◄── localStorage (persistence)
-│  - habit data    │
-│  - streak count  │
-│  - daily records │
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│    Index.tsx     │ ◄── Orchestrates everything
-└────────┬─────────┘
-         │
-         ├────────────────────┐
-         ▼                    ▼
-┌──────────────────┐  ┌──────────────────┐
-│  StreakDisplay   │  │   CameraView     │
-│  (read-only UI)  │  │   - video feed   │
-└──────────────────┘  │   - rep timer    │
-                      │   - overlays     │
-                      └────────┬─────────┘
-                               │
-                               ▼
-                      ┌──────────────────┐
-                      │useCameraDetection│
-                      │ - pattern learn  │
-                      │ - motion detect  │
-                      │ - match scoring  │
-                      └──────────────────┘
-```
-
-### Key State Management
-
-**useHabitStore** (persisted to localStorage):
-```typescript
-{
-  habit: {
-    habitName: string,
-    petName: string,
-    dailyGoal: number,
-    movementDuration: number,
-    referenceFrames: string[]  // Base64 encoded
-  },
-  streak: number,
-  longestStreak: number,
-  todayCompletedCount: number,
-  dailyRecords: DailyRecord[],
-  lastCompletedDate: string
-}
-```
-
-**useCameraDetection** (runtime only):
-```typescript
-{
-  isActive: boolean,      // Camera running?
-  motionLevel: number,    // Current motion (0-100)
-  matchScore: number,     // Pattern match (0-100)
-  patternMatch: boolean,  // Above threshold?
-  learnedPattern: MotionPattern | null
-}
-```
-
-### Streak Logic
-
-```typescript
-On rep completion:
-  if (todayCompletedCount >= dailyGoal) {
-    if (lastCompletedDate === yesterday) {
-      streak++  // Continue streak
-    } else {
-      streak = 1  // Start new streak
-    }
-  }
-
-On day change:
-  if (lastCompletedDate !== yesterday && lastCompletedDate !== today) {
-    streak = 0  // Missed a day, reset
-  }
-```
+| File                                 | Purpose                                                  |
+| ------------------------------------ | -------------------------------------------------------- |
+| `src/pages/Index.tsx`                | Main app page, orchestrates all components               |
+| `src/hooks/useHabitStore.ts`         | State management, streak logic, localStorage persistence |
+| `src/hooks/useCameraDetection.ts`    | Camera access, motion detection, pattern matching        |
+| `src/components/CameraView.tsx`      | Camera UI, rep timer, completion overlays                |
+| `src/components/OnboardingModal.tsx` | First-time setup and motion recording                    |
+| `src/components/StreakDisplay.tsx`   | Streak visualization                                     |
 
 ## 🚀 Getting Started
 
@@ -217,9 +85,13 @@ cd habpet
 
 # Install dependencies
 npm install
+# or
+bun install
 
 # Start development server
 npm run dev
+# or
+bun dev
 ```
 
 Open [http://localhost:5173](http://localhost:5173) in your browser.
@@ -228,20 +100,22 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ```bash
 npm run build
+# or
+bun run build
 ```
 
 ## 🛠️ Tech Stack
 
-| Technology | Purpose |
-|------------|---------|
-| **React 18** | UI framework |
-| **TypeScript** | Type safety |
-| **Vite** | Build tool & dev server |
-| **Tailwind CSS** | Styling |
-| **Framer Motion** | Animations |
-| **shadcn/ui** | UI components |
-| **canvas-confetti** | Celebration effects |
-| **date-fns** | Date formatting |
+| Technology          | Purpose                 |
+| ------------------- | ----------------------- |
+| **React 18**        | UI framework            |
+| **TypeScript**      | Type safety             |
+| **Vite**            | Build tool & dev server |
+| **Tailwind CSS**    | Styling                 |
+| **Framer Motion**   | Animations              |
+| **shadcn/ui**       | UI components           |
+| **canvas-confetti** | Celebration effects     |
+| **date-fns**        | Date formatting         |
 
 ## 📱 Browser Support
 
@@ -253,13 +127,43 @@ npm run build
 
 ## 🎮 Demo Mode
 
-The app includes a demo mode for testing streak logic:
+The app includes a demo mode for testing:
 
-- **Skip 24h**: Fast-forward to the next day
+- **Skip 24h**: Fast-forward to the next day to test streak logic
 - **Reset Demo**: Return to the current real date
 
 Access these controls at the bottom of the main screen.
 
+## 🔧 Configuration
+
+### Movement Duration
+
+Adjust how long you need to hold a movement to complete a rep (default: 30 seconds). Click the duration editor below the camera view.
+
+### Daily Goal
+
+Set during onboarding. To change, reset your habit and start fresh.
+
+## 🌐 Deployment
+
+### Using Lovable
+
+Simply open your [Lovable Project](https://lovable.dev) and click on **Share → Publish**.
+
+### Custom Domain
+
+To connect a domain, navigate to **Project → Settings → Domains** and click **Connect Domain**.
+
+Read more: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+
 ## 📄 License
 
 MIT License — feel free to use, modify, and distribute.
+
+## 🤝 Contributing
+
+Contributions welcome! Please open an issue first to discuss proposed changes.
+
+---
+
+Built with ❤️ using [Lovable](https://lovable.dev)
