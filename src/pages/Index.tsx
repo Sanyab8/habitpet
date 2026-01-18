@@ -94,7 +94,7 @@ const Index = () => {
 
       {/* Main content */}
       <div className="relative max-w-6xl mx-auto p-6 space-y-8">
-        <HabitHeader habitName={habit.habitName} onReset={resetHabit} />
+        <HabitHeader habitName={habit.habitName} petName={habit.petName} onReset={resetHabit} />
 
         {/* Date & Time Display */}
         <motion.div

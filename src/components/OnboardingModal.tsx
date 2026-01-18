@@ -15,7 +15,7 @@ const steps = [
   {
     id: 'welcome',
     icon: Sparkles,
-    title: 'Welcome to Habit Buddy',
+    title: 'Welcome to Habpet',
     description: 'Your AI-powered companion for building consistent habits',
   },
   {
