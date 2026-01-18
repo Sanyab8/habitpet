@@ -25,9 +25,20 @@ export interface HabitState {
 }
 
 const STORAGE_KEY = 'habit-buddy-data';
+const DEMO_OFFSET_KEY = 'habit-buddy-demo-offset';
+
+// Get demo day offset (for testing)
+const getDemoOffset = (): number => {
+  const offset = localStorage.getItem(DEMO_OFFSET_KEY);
+  return offset ? parseInt(offset, 10) : 0;
+};
 
 // Get today's date key - resets at midnight (11:59 PM)
-const getTodayKey = () => new Date().toISOString().split('T')[0];
+const getTodayKey = () => {
+  const now = new Date();
+  now.setDate(now.getDate() + getDemoOffset());
+  return now.toISOString().split('T')[0];
+};
 
 export const useHabitStore = () => {
   const [state, setState] = useState<HabitState>({
@@ -237,6 +248,47 @@ export const useHabitStore = () => {
     });
   }, []);
 
+  // Demo: Skip forward 24 hours
+  const skipDay = useCallback(() => {
+    const currentOffset = getDemoOffset();
+    localStorage.setItem(DEMO_OFFSET_KEY, String(currentOffset + 1));
+    
+    // Force reload state with new day
+    const todayKey = getTodayKey();
+    setState(prev => {
+      if (!prev.habit) return prev;
+      
+      const todayRecord = prev.dailyRecords.find(r => r.date === todayKey);
+      
+      // Check streak logic
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() + getDemoOffset() - 1);
+      const yesterdayKey = yesterday.toISOString().split('T')[0];
+      
+      let newStreak = prev.streak;
+      if (prev.lastCompletedDate && prev.lastCompletedDate !== todayKey) {
+        if (prev.lastCompletedDate !== yesterdayKey) {
+          newStreak = 0;
+        }
+      }
+      
+      return {
+        ...prev,
+        streak: newStreak,
+        todayCompletedCount: todayRecord?.completedCount || 0,
+      };
+    });
+  }, []);
+
+  // Demo: Reset day offset
+  const resetDemoMode = useCallback(() => {
+    localStorage.removeItem(DEMO_OFFSET_KEY);
+    window.location.reload();
+  }, []);
+
+  // Get current demo day offset
+  const getDemoDay = useCallback(() => getDemoOffset(), []);
+
   return {
     ...state,
     setHabit,
@@ -246,5 +298,8 @@ export const useHabitStore = () => {
     resetHabit,
     getTimeRemaining,
     handleDeadlineExpired,
+    skipDay,
+    resetDemoMode,
+    getDemoDay,
   };
 };

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Settings, X, Clock, Minus, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 interface DurationEditorProps {
   currentDuration: number; // in seconds
@@ -11,9 +12,11 @@ interface DurationEditorProps {
 export const DurationEditor = ({ currentDuration, onDurationChange }: DurationEditorProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [tempDuration, setTempDuration] = useState(currentDuration);
+  const [customValue, setCustomValue] = useState('');
 
   const handleOpen = () => {
     setTempDuration(currentDuration);
+    setCustomValue('');
     setIsOpen(true);
   };
 
@@ -23,8 +26,26 @@ export const DurationEditor = ({ currentDuration, onDurationChange }: DurationEd
   };
 
   const adjustDuration = (delta: number) => {
-    const newValue = Math.max(1, Math.min(60, tempDuration + delta));
+    const newValue = Math.max(1, Math.min(3600, tempDuration + delta));
     setTempDuration(newValue);
+    setCustomValue('');
+  };
+
+  const handleCustomChange = (value: string) => {
+    setCustomValue(value);
+    const parsed = parseInt(value, 10);
+    if (!isNaN(parsed) && parsed >= 1 && parsed <= 3600) {
+      setTempDuration(parsed);
+    }
+  };
+
+  const formatDuration = (seconds: number) => {
+    if (seconds >= 60) {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+    }
+    return `${seconds}s`;
   };
 
   return (
@@ -85,11 +106,10 @@ export const DurationEditor = ({ currentDuration, onDurationChange }: DurationEd
                       <Minus className="w-5 h-5" />
                     </button>
 
-                    <div className="text-center min-w-[100px]">
-                      <span className="text-4xl font-display font-bold text-primary">
-                        {tempDuration}
+                    <div className="text-center min-w-[120px]">
+                      <span className="text-3xl font-display font-bold text-primary">
+                        {formatDuration(tempDuration)}
                       </span>
-                      <span className="text-xl text-muted-foreground ml-1">sec</span>
                     </div>
 
                     <button
@@ -102,19 +122,39 @@ export const DurationEditor = ({ currentDuration, onDurationChange }: DurationEd
 
                   {/* Quick presets */}
                   <div className="flex gap-2 flex-wrap justify-center">
-                    {[5, 10, 15, 30, 60].map((preset) => (
+                    {[5, 10, 15, 30, 60, 120, 300].map((preset) => (
                       <button
                         key={preset}
-                        onClick={() => setTempDuration(preset)}
+                        onClick={() => {
+                          setTempDuration(preset);
+                          setCustomValue('');
+                        }}
                         className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
                           tempDuration === preset
                             ? 'bg-primary text-primary-foreground'
                             : 'bg-muted hover:bg-muted/80 text-muted-foreground'
                         }`}
                       >
-                        {preset}s
+                        {formatDuration(preset)}
                       </button>
                     ))}
+                  </div>
+
+                  {/* Custom input */}
+                  <div className="w-full">
+                    <label className="text-xs text-muted-foreground mb-1 block">Custom (seconds)</label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={3600}
+                      placeholder="Enter custom seconds (1-3600)"
+                      value={customValue}
+                      onChange={(e) => handleCustomChange(e.target.value)}
+                      className="text-center"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1 text-center">
+                      Max: 1 hour (3600 seconds)
+                    </p>
                   </div>
                 </div>
 
