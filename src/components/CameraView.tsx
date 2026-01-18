@@ -43,11 +43,18 @@ export const CameraView = ({
   // isn't constantly reset by fast matchScore updates.
   const matchZoneRef = useRef(false);
   const isActiveRef = useRef(false);
+  const lastGoodMatchRef = useRef(0);
 
   useEffect(() => {
-    matchZoneRef.current = state.patternMatch || state.matchScore >= 70;
+    const isInMatchZone = state.patternMatch || (state.matchScore >= 70 && state.motionLevel >= 0.3);
+
+    matchZoneRef.current = isInMatchZone;
     isActiveRef.current = state.isActive;
-  }, [state.patternMatch, state.matchScore, state.isActive]);
+
+    if (isInMatchZone) {
+      lastGoodMatchRef.current = Date.now();
+    }
+  }, [state.patternMatch, state.matchScore, state.motionLevel, state.isActive]);
 
   const isAllComplete = completedCount >= dailyGoal;
 
@@ -74,13 +81,13 @@ export const CameraView = ({
 
   // Track consecutive matches with stickiness
   useEffect(() => {
-    const isInMatchZone = state.patternMatch || state.matchScore >= 70;
+    const isInMatchZone = state.patternMatch || (state.matchScore >= 70 && state.motionLevel >= 0.3);
     if (isInMatchZone) {
       setMatchStreak(prev => Math.min(prev + 1, 180));
     } else {
       setMatchStreak(prev => Math.max(prev - 2, 0));
     }
-  }, [state.patternMatch, state.matchScore]);
+  }, [state.patternMatch, state.matchScore, state.motionLevel]);
 
   // Monitor for sustained matching to start rep timer
   useEffect(() => {
@@ -99,8 +106,19 @@ export const CameraView = ({
   useEffect(() => {
     if (!isTimerRunning) return;
 
+    const graceMs = 2000;
+
     const interval = window.setInterval(() => {
-      if (!isActiveRef.current || !matchZoneRef.current) return;
+      if (!isActiveRef.current) return;
+
+      // Refresh "last good" timestamp while we're matching.
+      if (matchZoneRef.current) {
+        lastGoodMatchRef.current = Date.now();
+      }
+
+      // Allow brief dips without freezing the timer.
+      const withinGrace = Date.now() - lastGoodMatchRef.current < graceMs;
+      if (!withinGrace) return;
 
       setRepTimer(prev => (prev === null ? null : Math.max(prev - 1, 0)));
     }, 1000);
